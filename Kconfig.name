@@ -1,0 +1,2 @@
+config BOARD_ASUS_Z97_AR
+bool "Z97-AR"

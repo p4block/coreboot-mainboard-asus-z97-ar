@@ -1,0 +1,8 @@
+Category: desktop
+Vendor name: ASUS
+Board name: Z97-AR
+ROM package: DIP8
+ROM socketed: y
+ROM protocol: SPI
+Flashrom support: y
+Release year: 2015
