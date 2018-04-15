@@ -13,8 +13,10 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
+ 
+#include <cbfs.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <stddef.h>
 #include <console/console.h>
 #include <cpu/intel/haswell/haswell.h>
@@ -22,44 +24,19 @@
 #include <northbridge/intel/haswell/raminit.h>
 #include <southbridge/intel/lynxpoint/pch.h>
 #include <southbridge/intel/common/gpio.h>
+#include <superio/nuvoton/common/nuvoton.h>
+#include <superio/nuvoton/nct6791d/nct6791d.h>
 
 const struct rcba_config_instruction rcba_config[] = {
-	/*
-	 *             GFX    INTA -> PIRQA (MSI)
-	 * D28IP_P1IP  WLAN   INTA -> PIRQB
-	 * D28IP_P4IP  ETH0   INTB -> PIRQC
-	 * D29IP_E1P   EHCI1  INTA -> PIRQD
-	 * D26IP_E2P   EHCI2  INTA -> PIRQE
-	 * D31IP_SIP   SATA   INTA -> PIRQF (MSI)
-	 * D31IP_SMIP  SMBUS  INTB -> PIRQG
-	 * D31IP_TTIP  THRT   INTC -> PIRQH
-	 * D27IP_ZIP   HDA    INTA -> PIRQG (MSI)
-	 */
-
-	/* Device interrupt pin register (board specific) */
-	RCBA_SET_REG_32(D31IP, (INTC << D31IP_TTIP) | (NOINT << D31IP_SIP2) |
-		               (INTB << D31IP_SMIP) | (INTA << D31IP_SIP)),
-	RCBA_SET_REG_32(D30IP, (NOINT << D30IP_PIP)),
-	RCBA_SET_REG_32(D29IP, (INTA << D29IP_E1P)),
-	RCBA_SET_REG_32(D28IP, (INTA << D28IP_P1IP) | (INTC << D28IP_P3IP) |
-	                       (INTB << D28IP_P4IP)),
-	RCBA_SET_REG_32(D27IP, (INTA << D27IP_ZIP)),
-	RCBA_SET_REG_32(D26IP, (INTA << D26IP_E2P)),
-	RCBA_SET_REG_32(D25IP, (NOINT << D25IP_LIP)),
-	RCBA_SET_REG_32(D22IP, (NOINT << D22IP_MEI1IP)),
-
 	/* Device interrupt route registers */
-	RCBA_SET_REG_32(D31IR, DIR_ROUTE(PIRQF, PIRQG, PIRQH, PIRQA)),
-	RCBA_SET_REG_32(D29IR, DIR_ROUTE(PIRQD, PIRQE, PIRQF, PIRQG)),
-	RCBA_SET_REG_32(D28IR, DIR_ROUTE(PIRQB, PIRQC, PIRQD, PIRQE)),
-	RCBA_SET_REG_32(D27IR, DIR_ROUTE(PIRQG, PIRQH, PIRQA, PIRQB)),
-	RCBA_SET_REG_32(D26IR, DIR_ROUTE(PIRQE, PIRQF, PIRQG, PIRQH)),
-	RCBA_SET_REG_32(D25IR, DIR_ROUTE(PIRQA, PIRQB, PIRQC, PIRQD)),
-	RCBA_SET_REG_32(D22IR, DIR_ROUTE(PIRQA, PIRQB, PIRQC, PIRQD)),
-
-	/* Disable unused devices (board specific) */
-	RCBA_RMW_REG_32(FD, ~0, PCH_DISABLE_ALWAYS),
-
+	RCBA_SET_REG_32(D31IR, DIR_ROUTE(PIRQG, PIRQC, PIRQB, PIRQA)),/* LPC */
+	RCBA_SET_REG_32(D29IR, DIR_ROUTE(PIRQD, PIRQD, PIRQD, PIRQD)),/* EHCI */
+	RCBA_SET_REG_32(D28IR, DIR_ROUTE(PIRQA, PIRQB, PIRQC, PIRQD)),/* PCIE */
+	RCBA_SET_REG_32(D27IR, DIR_ROUTE(PIRQG, PIRQG, PIRQG, PIRQG)),/* HDA */
+	RCBA_SET_REG_32(D22IR, DIR_ROUTE(PIRQA, PIRQA, PIRQA, PIRQA)),/* ME */
+	RCBA_SET_REG_32(D21IR, DIR_ROUTE(PIRQE, PIRQF, PIRQF, PIRQF)),/* SIO */
+	RCBA_SET_REG_32(D20IR, DIR_ROUTE(PIRQC, PIRQC, PIRQC, PIRQC)),/* XHCI */
+	RCBA_SET_REG_32(D23IR, DIR_ROUTE(PIRQH, PIRQH, PIRQH, PIRQH)),/* SDIO */
 	RCBA_END_CONFIG,
 };
 
@@ -81,7 +58,7 @@ void mainboard_romstage_entry(unsigned long bist)
 		.temp_mmio_base = 0xfed08000,
 		.system_type = 1, // 0 Mobile, 1 Desktop/Server
 		.tseg_size = CONFIG_SMM_TSEG_SIZE,
-		.spd_addresses = { 0xa0, 0xa2, 0xa4, 0xa6 },
+		.spd_addresses = { 0x50, 0x51, 0x52, 0x53 },
 		.ec_present = 0,
 		// 0 = leave channel enabled
 		// 1 = disable dimm 0 on channel
@@ -137,8 +114,16 @@ void mainboard_romstage_entry(unsigned long bist)
 		.gpio_map = &mainboard_gpio_map,
 		.rcba_config = &rcba_config[0],
 		.bist = bist,
-		.copy_spd = NULL,
 	};
+	
+	/* Setup SuperIO */
+  static const pnp_devfn_t GLOBAL_PSEUDO_DEV = PNP_DEV(0x2e, 0);
+  
+  nuvoton_pnp_enter_conf_state(GLOBAL_PSEUDO_DEV);
+  nuvoton_enable_serial(GLOBAL_PSEUDO_DEV, CONFIG_TTYS0_BASE);
+  
+  nuvoton_pnp_exit_conf_state(GLOBAL_PSEUDO_DEV);
+
 
 	/* Call into the real romstage main with this board's attributes. */
 	romstage_common(&romstage_params);

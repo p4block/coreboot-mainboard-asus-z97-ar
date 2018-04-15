@@ -49,4 +49,10 @@ config MAX_CPUS
     int
     default 8
 
+config SUPERIO_NUVOTON_NCT6791D
+    bool
+    default y
+
+    
+
 endif
